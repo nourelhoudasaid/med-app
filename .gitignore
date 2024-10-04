@@ -1,0 +1,6 @@
+# Ignorer les fichiers de MongoDB
+/database/data/
+/database/data/db/WiredTiger*
+/database/data/db/journal/
+
+node_modules/
