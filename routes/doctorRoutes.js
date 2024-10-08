@@ -1,27 +1,25 @@
 // routes/doctorRoutes.js
-const express = require('express');
-const multer = require('multer');
-const Doctor = require('./models/Doctor');
+const express = require("express");
+const multer = require("multer");
 const router = express.Router();
-const path = require('path');
-const User = require('../models/user');
-s
+const path = require("path");
+const User = require("../models/User");
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/'); // Destination folder for uploaded images
+    cb(null, "uploads/"); // Destination folder for uploaded images
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname)); // Save file with current timestamp to avoid conflicts
-  }
+  },
 });
 const upload = multer({ storage: storage });
 
 // Create a new doctor with image upload
-router.post('/register', upload.single('image'), async (req, res) => {
+router.post("/register", upload.single("image"), async (req, res) => {
   const { name, specialty, availableTimes } = req.body;
-const role = "Doctor"
+  const role = "Doctor";
   try {
     const doctor = new User({
       name,
@@ -32,67 +30,69 @@ const role = "Doctor"
     });
 
     await doctor.save();
-    res.status(201).json({ message: 'Doctor created successfully', doctor });
+    res.status(201).json({ message: "Doctor created successfully", doctor });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: "Server error", error });
   }
 });
 
 // Get all doctors
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const doctors = await Doctor.find();
+    const doctors = await User.find();
     res.status(200).json(doctors);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: "Server error", error });
   }
 });
 
 // Get doctor by ID
-router.get('/:id', async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
-    const doctor = await Doctor.findById(req.params.id);
+    const doctor = await User.findById(req.params.id);
     if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+      return res.status(404).json({ message: "Doctor not found" });
     }
     res.status(200).json(doctor);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: "Server error", error });
   }
 });
 
 // Update doctor by ID
-router.put('/:id', upload.single('image'), async (req, res) => {
+router.put("/:id", upload.single("image"), async (req, res) => {
   const { name, specialty, availableTimes } = req.body;
 
   try {
-    const doctor = await Doctor.findById(req.params.id);
+    const doctor = await User.findById(req.params.id);
     if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+      return res.status(404).json({ message: "Doctor not found" });
     }
 
     doctor.name = name || doctor.name;
     doctor.specialty = specialty || doctor.specialty;
-    doctor.availableTimes = availableTimes ? JSON.parse(availableTimes) : doctor.availableTimes;
+    doctor.availableTimes = availableTimes
+      ? JSON.parse(availableTimes)
+      : doctor.availableTimes;
     doctor.image = req.file ? req.file.path : doctor.image; // Update image if a new one is uploaded
 
     await doctor.save();
-    res.status(200).json({ message: 'Doctor updated successfully', doctor });
+    res.status(200).json({ message: "Doctor updated successfully", doctor });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: "Server error", error });
   }
 });
 
 // Delete doctor by ID
-router.delete('/:id', async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    const doctor = await Doctor.findByIdAndDelete(req.params.id);
+    const doctor = await User.findByIdAndDelete(req.params.id);
     if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
+      return res.status(404).json({ message: "Doctor not found" });
     }
-    res.status(200).json({ message: 'Doctor deleted successfully' });
+    res.status(200).json({ message: "Doctor deleted successfully" });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: "Server error", error });
   }
 });
 
