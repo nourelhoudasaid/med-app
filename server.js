@@ -8,6 +8,7 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const indexRoutes = require('./routes/index'); 
 
+
 // Load environment variables
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use('/uploads', express.static('uploads'));
 
 // Use the auth routes
 app.use('/api/auth', authRoutes);
+
 
 // Use routes from index.js
 app.use('/', indexRoutes);  // Apply all routes from index.js
@@ -59,7 +61,7 @@ io.on('connection', (socket) => {
 });
 
 // Start server using `server.listen` instead of `app.listen`
-const PORT = process.env.PORT || 5006;
+const PORT = process.env.PORT || 5009;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

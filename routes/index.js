@@ -11,4 +11,5 @@ router.use("/api/doctors", doctorRoutes);
 router.use("/api/patients", patientRoutes);
 router.use("/api/appointments", appointmentRoutes);
 
+
 module.exports = router;
