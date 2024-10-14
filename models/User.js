@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
-const Schema = mongoose.Schema;
-const bcrypt = require("bcryptjs"); // Assuming you are using bcryptjs for password hashing
+const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
@@ -17,7 +16,7 @@ const userSchema = new mongoose.Schema(
       select: false,
       match: [/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}$/, 'Password must contain at least 8 characters, including uppercase, lowercase, number and special character']
     },
-    role: { type: String, enum: ["Doctor", "Patient"], required: true },
+    role: { type: String, enum: ["Doctor", "Patient", "Admin"], required: true },
     // Fields for patients
     medicalHistory: { type: String, required: function() { return this.role === "Patient"; } },
     // Fields for doctors
@@ -26,7 +25,7 @@ const userSchema = new mongoose.Schema(
     diplomaImage: { type: String, required: function() { return this.role === "Doctor"; } },
     // Common fields
     profileImage: { type: String , required: function() { return this.role === "Doctor"; }},
-    isValidated: { type: Boolean, default: function() { return this.role === "Patient"; } },
+    isValidated: { type: Boolean, default: function() { return this.role === "Patient" || this.role === "Admin"; } },
   },
   { timestamps: true }
 );
@@ -39,7 +38,5 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// Prevent model overwrite error by using mongoose.models.User
-const User = mongoose.models.User || mongoose.model("User", userSchema);
-
-module.exports = User;
+// Check if the model already exists before creating a new one
+module.exports = mongoose.models.User || mongoose.model("User", userSchema);
