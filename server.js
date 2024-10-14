@@ -7,36 +7,30 @@ const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const indexRoutes = require('./routes/index'); 
-
+const fs = require('fs');
+const path = require('path');
 
 // Load environment variables
 dotenv.config();
 
 // Connect to MongoDB
 connectDB();
-
-// Initialize app
 const app = express();
+const server = http.createServer(app);
+// Initialize app
+
 
 // Middleware
 app.use(express.json());
 app.use(cors());
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)){
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 app.use('/uploads', express.static('uploads'));
-
-// Use the auth routes
-app.use('/api/auth', authRoutes);
-
-
-// Use routes from index.js
-app.use('/', indexRoutes);  // Apply all routes from index.js
-
-// Simple test route
-app.get('/', (req, res) => {
-  res.send('Server is running');
-});
-
-// Initialize the HTTP server *before* using it with Socket.io
-const server = http.createServer(app);
 
 // Initialize Socket.io after the server has been created
 const io = socketio(server, {
@@ -45,6 +39,23 @@ const io = socketio(server, {
     methods: ["GET", "POST"]
   }
 });
+// Use the auth routes
+app.use('/api/auth', authRoutes);
+
+
+// Use routes from index.js
+const routes = require('./routes/index')(io);
+app.use('/', routes);  // Apply all routes from index.js
+
+// Simple test route
+app.get('/', (req, res) => {
+  res.send('Server is running');
+});
+
+// Initialize the HTTP server *before* using it with Socket.io
+
+
+
 
 // Socket.io connection event
 io.on('connection', (socket) => {
@@ -61,7 +72,7 @@ io.on('connection', (socket) => {
 });
 
 // Start server using `server.listen` instead of `app.listen`
-const PORT = process.env.PORT || 5009;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

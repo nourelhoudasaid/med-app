@@ -5,21 +5,36 @@ const bcrypt = require("bcryptjs"); // Assuming you are using bcryptjs for passw
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    email: { 
+      type: String, 
+      required: true, 
+      unique: true,
+      match: [/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/, 'Please enter a valid email address']
+    },
+    password: { 
+      type: String, 
+      required: true,
+      select: false,
+      match: [/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}$/, 'Password must contain at least 8 characters, including uppercase, lowercase, number and special character']
+    },
     role: { type: String, enum: ["Doctor", "Patient"], required: true },
-    medicalHistory: { type: String }, // for patients
-    specialization: { type: String }, // for doctors
-    availability: { type: String }, // for doctors
+    // Fields for patients
+    medicalHistory: { type: String, required: function() { return this.role === "Patient"; } },
+    // Fields for doctors
+    specialization: { type: String, required: function() { return this.role === "Doctor"; } },
+    availability: { type: String, required: function() { return this.role === "Doctor"; } },
+    diplomaImage: { type: String, required: function() { return this.role === "Doctor"; } },
+    // Common fields
+    profileImage: { type: String , required: function() { return this.role === "Doctor"; }},
+    isValidated: { type: Boolean, default: function() { return this.role === "Patient"; } },
   },
   { timestamps: true }
 );
 
 // Hash the password before saving the user
 userSchema.pre("save", async function (next) {
-  const user = this;
-  if (user.isModified("password")) {
-    user.password = await bcrypt.hash(user.password, 8);
+  if (this.isModified("password")) {
+    this.password = await bcrypt.hash(this.password, 8);
   }
   next();
 });

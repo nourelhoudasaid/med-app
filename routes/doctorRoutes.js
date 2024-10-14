@@ -11,13 +11,17 @@ const storage = multer.diskStorage({
     cb(null, "uploads/"); // Destination folder for uploaded images
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // Save file with current timestamp to avoid conflicts
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   },
 });
 const upload = multer({ storage: storage });
 
 // Create a new doctor with image upload
-router.post("/register", upload.single("image"), async (req, res) => {
+router.post("/register", upload.fields([
+  { name: 'profileImage', maxCount: 1 },
+  { name: 'diplomaImage', maxCount: 1 }
+]), async (req, res) => {
   const { name, specialty, availableTimes } = req.body;
   const role = "Doctor";
   try {
@@ -26,7 +30,9 @@ router.post("/register", upload.single("image"), async (req, res) => {
       specialty,
       role,
       availableTimes: JSON.parse(availableTimes), // Assuming availableTimes is sent as JSON string
-      image: req.file ? req.file.path : null, // Store the uploaded image path
+      profileImage: req.files['profileImage'] ? req.files['profileImage'][0].path : null,
+      diplomaImage: req.files['diplomaImage'] ? req.files['diplomaImage'][0].path : null,
+      isValidated: false, // valider par admin
     });
 
     await doctor.save();
@@ -39,10 +45,24 @@ router.post("/register", upload.single("image"), async (req, res) => {
 // Get all doctors
 router.get("/", async (req, res) => {
   try {
-    const doctors = await User.find();
-    res.status(200).json(doctors);
+    const doctors = await User.find({ role: "Doctor" })
+      .lean();
+    
+    // Transform the data to include only necessary fields
+    const formattedDoctors = doctors.map(doctor => ({
+      _id: doctor._id,
+      name: doctor.name,
+      email: doctor.email,
+      specialization: doctor.specialization,
+      availability: doctor.availability,
+      isValidated: doctor.isValidated,
+      profileImage: doctor.profileImage
+    }));
+
+    res.status(200).json(formattedDoctors);
   } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    console.error('Error fetching doctors:', error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
@@ -60,7 +80,10 @@ router.get("/:id", async (req, res) => {
 });
 
 // Update doctor by ID
-router.put("/:id", upload.single("image"), async (req, res) => {
+router.put("/:id", upload.fields([
+  { name: 'profileImage', maxCount: 1 },
+  { name: 'diplomaImage', maxCount: 1 }
+]), async (req, res) => {
   const { name, specialty, availableTimes } = req.body;
 
   try {
@@ -74,7 +97,12 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     doctor.availableTimes = availableTimes
       ? JSON.parse(availableTimes)
       : doctor.availableTimes;
-    doctor.image = req.file ? req.file.path : doctor.image; // Update image if a new one is uploaded
+    if (req.files['profileImage']) {
+      doctor.profileImage = req.files['profileImage'][0].path;
+    }
+    if (req.files['diplomaImage']) {
+      doctor.diplomaImage = req.files['diplomaImage'][0].path;
+    }
 
     await doctor.save();
     res.status(200).json({ message: "Doctor updated successfully", doctor });
