@@ -23,14 +23,19 @@ router.put("/verify-doctor/:id", authMiddleware, isAdmin, async (req, res) => {
       return res.status(400).json({ message: "User is not a doctor" });
     }
 
-    doctor.isValidated = !doctor.isValidated; // Toggle the validation status
-    await doctor.save();
+    // Update only the isValidated field to true
+    await User.updateOne({ _id: req.params.id }, { isValidated: true });
 
-    res.json({ message: "Doctor verification status updated", doctor });
+    // Optionally, retrieve the updated doctor for confirmation
+    const updatedDoctor = await User.findById(req.params.id);
+
+    res.json({
+      message: "Doctor verification status updated",
+      doctor: updatedDoctor,
+    });
   } catch (error) {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 });
 
 module.exports = router;
-
