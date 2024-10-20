@@ -2,8 +2,9 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
-const path = require("path");
+const path = require("path");s
 const User = require("../models/user");
+const { sendConfirmationEmail } = require("../services/emailService");
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here";
@@ -87,6 +88,9 @@ router.post(
 
       // Save the user to the database
       await newUser.save();
+
+      // Send confirmation email
+      await sendConfirmationEmail(email, name, role);
 
       res
         .status(201)

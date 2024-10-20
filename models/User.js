@@ -16,6 +16,8 @@ const userSchema = new mongoose.Schema(
       select: false,
       match: [/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}$/, 'Password must contain at least 8 characters, including uppercase, lowercase, number and special character']
     },
+    phoneNumber: {type: String, required: true },
+    CIN: { type: String}, 
     role: { type: String, enum: ["Doctor", "Patient", "Admin"], required: true },
     // Fields for patients
     medicalHistory: { type: String, required: function() { return this.role === "Patient"; } },
@@ -23,9 +25,10 @@ const userSchema = new mongoose.Schema(
     specialization: { type: String, required: function() { return this.role === "Doctor"; } },
     availability: { type: String, required: function() { return this.role === "Doctor"; } },
     diplomaImage: { type: String, required: function() { return this.role === "Doctor"; } },
+   
     // Common fields
     profileImage: { type: String , required: function() { return this.role === "Doctor"; }},
-    isValidated: { type: Boolean, default: function() { return this.role === "Patient" || this.role === "Admin"; } },
+    isValidated: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
