@@ -4,3 +4,4 @@
 /database/data/db/journal/
 
 node_modules/
+/.env/
