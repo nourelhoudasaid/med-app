@@ -6,6 +6,7 @@ const twilio = require('twilio');
 //const emailService = require('../services/emailService'); // mamlthch
 const generateCredentials = require('../utils/generateCredentials'); 
 const bcrypt = require('bcrypt');
+const { authenticateUser, authorizePatient } = require("../middleware/auth");
 
 // Middleware to check if the user is an admin
 const isAdmin = (req, res, next) => {
@@ -17,7 +18,7 @@ const isAdmin = (req, res, next) => {
 };
 
 // Route to change doctor verification status
-router.put("/verify-doctor/:id", authMiddleware, isAdmin, async (req, res) => {
+router.put("/verify-doctor/:id", authenticateUser,authorizePatient, isAdmin, async (req, res) => {
   try {
     const doctor = await User.findById(req.params.id);
     if (!doctor) {

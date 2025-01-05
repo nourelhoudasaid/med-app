@@ -5,25 +5,35 @@ const multer = require("multer");
 const path = require("path");
 const User = require("../models/user");
 const { sendConfirmationEmail } = require("../services/emailService");
+const cloudinary = require('../config/cloudinary');
 const router = express.Router();
+const { Readable } = require('stream');
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here";
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, "..", "uploads"));
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(
-      null,
-      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
-    );
-  },
-});
-
+// Configure multer for memory storage
+const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
+
+// Helper function to upload buffer to Cloudinary
+const uploadToCloudinary = async (buffer) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'doctors', // Optional: organize uploads in folders
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+
+    const bufferStream = new Readable();
+    bufferStream.push(buffer);
+    bufferStream.push(null);
+    bufferStream.pipe(uploadStream);
+  });
+};
 
 // Register Route
 router.post(
@@ -33,71 +43,86 @@ router.post(
     { name: "diplomaImage", maxCount: 1 },
   ]),
   async (req, res) => {
-    const {
-      name,
-      email,
-      password,
-      role,
-      specialization,
-      availability,
-      medicalHistory,
-    } = req.body;
-
     try {
-      // Validate the required fields
-      if (!name || !email || !password || !role) {
-        return res
-          .status(400)
-          .json({ message: "Please provide all required fields" });
+      const {
+        name,
+        email,
+        password,
+        role,
+        phoneNumber,
+        CIN,
+        specialization,
+        availability,
+        medicalHistory,
+      } = req.body;
+
+      // Validate required fields
+      if (!name || !email || !password || !role || !phoneNumber || !CIN) {
+        return res.status(400).json({ 
+          message: "Please provide all required fields" 
+        });
       }
 
-      // Check if the user already exists
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        return res
-          .status(400)
-          .json({ message: "User with this email already exists" });
+      let profileImageUrl = null;
+      let diplomaImageUrl = null;
+
+      // Upload images if present and if user is a doctor
+      if (role === "Doctor" && req.files) {
+        try {
+          if (req.files.profileImage) {
+            const profileResult = await uploadToCloudinary(
+              req.files.profileImage[0].buffer
+            );
+            profileImageUrl = profileResult.secure_url;
+          }
+
+          if (req.files.diplomaImage) {
+            const diplomaResult = await uploadToCloudinary(
+              req.files.diplomaImage[0].buffer
+            );
+            diplomaImageUrl = diplomaResult.secure_url;
+          }
+        } catch (uploadError) {
+          console.error('Upload error:', uploadError);
+          return res.status(500).json({ 
+            message: "Error uploading images", 
+            error: uploadError.message 
+          });
+        }
       }
 
-      // Create a new user
+      // Create new user
       const newUser = new User({
         name,
         email,
         password,
         role,
+        phoneNumber,
+        CIN,
         specialization: role === "Doctor" ? specialization : undefined,
         availability: role === "Doctor" ? availability : undefined,
         medicalHistory: role === "Patient" ? medicalHistory : undefined,
-        profileImage: req.files["profileImage"]
-          ? req.files["profileImage"][0].path
-          : null,
-        diplomaImage:
-          role === "Doctor" && req.files["diplomaImage"]
-            ? req.files["diplomaImage"][0].path
-            : null,
+        profileImage: profileImageUrl,
+        diplomaImage: diplomaImageUrl,
         isValidated: role === "Doctor" ? false : true,
       });
 
-      const validationError = newUser.validateSync();
-      if (validationError) {
-        const errors = Object.values(validationError.errors).map(
-          (error) => error.message
-        );
-        return res.status(400).json({ message: "Validation failed", errors });
-      }
-
-      // Save the user to the database
       await newUser.save();
 
       // Send confirmation email
       await sendConfirmationEmail(email, name, role);
 
-      res
-        .status(201)
-        .json({ message: "User registered successfully", user: newUser });
+      res.status(201).json({
+        message: "User registered successfully",
+        user: newUser
+      });
+
     } catch (error) {
       console.error("Registration error:", error);
-      res.status(500).json({ message: "Server error", error: error.message });
+      res.status(500).json({ 
+        message: "Server error", 
+        error: error.message 
+      });
     }
   }
 );
@@ -137,8 +162,8 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Create a JWT token
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
+    // Create a JWT token with the user role added
+    const token = jwt.sign({ userId: user._id, role: user.role }, JWT_SECRET, {
       expiresIn: "1h",
     });
 
@@ -148,6 +173,8 @@ router.post("/login", async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      phoneNumber: user.phoneNumber,
+      CIN: user.CIN,
       isValidated: user.isValidated,
       profileImage: user.profileImage,
     };
@@ -159,4 +186,9 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Logout endpoint
+router.post("/logout", (req, res) => {
+  // Client-side will handle removing token
+  res.status(200).json({ message: "User logged out successfully" });
+});
 module.exports = router;

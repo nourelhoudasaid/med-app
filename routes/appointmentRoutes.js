@@ -1,4 +1,4 @@
-const express = require("express");
+/*  const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/Appointment");
 
@@ -39,17 +39,19 @@ module.exports = function(io) {
   // @access  Public
   router.post("/create", async (req, res) => {
     console.log("Appointment creation route hit");
-    const { patient, doctor, appointmentDate, reason } = req.body;
+    const { name, phone, department, doctor, appointmentDate, reason} = req.body;
     console.log("Request body:", req.body);
 
-    if (!patient || !doctor || !appointmentDate || !reason) {
+    if (!name || !phone || !department || !doctor || !appointmentDate || !reason) {
       return res.status(400).json({ message: "Please provide all required fields" });
     }
 
     try {
       console.log("Creating new appointment");
       const newAppointment = new Appointment({
-        patient,
+        name,
+        phone,
+        department,
         doctor,
         appointmentDate,
         reason,
@@ -111,6 +113,99 @@ module.exports = function(io) {
 
       io.emit("deleteAppointment", appointment._id);
 
+      res.json({ message: "Appointment removed" });
+    } catch (error) {
+      res.status(500).json({ message: "Server Error", error: error.message });
+    }
+  });
+
+  return router;
+};*/
+
+const express = require("express");
+const router = express.Router();
+const Appointment = require("../models/Appointment");
+const { authenticateUser, authorizePatient } = require("../middleware/auth");
+
+module.exports = function(io) {
+  // @desc    Get all appointments (requires authentication)
+  // @route   GET /api/appointments
+  router.get("/", authenticateUser, async (req, res) => {
+    try {
+      const appointments = await Appointment.find()
+        .populate("patient", "name email")
+        .populate("doctor", "name specialization");
+      res.json(appointments);
+    } catch (error) {
+      res.status(500).json({ message: "Server Error", error: error.message });
+    }
+  });
+
+  // @desc    Create new appointment (Patients only)
+  // @route   POST /api/appointments/create
+  router.post("/create", authenticateUser, authorizePatient, async (req, res) => {
+    console.log("Appointment creation route hit");
+
+    const { name, phone, department, doctor, appointmentDate, reason } = req.body;
+
+    if (!name || !phone || !department || !doctor || !appointmentDate || !reason) {
+      return res.status(400).json({ message: "Please provide all required fields" });
+    }
+
+    try {
+      const newAppointment = new Appointment({
+        name,
+        phone,
+        department,
+        doctor,
+        appointmentDate,
+        reason,
+        patient: req.user._id, // Associate the appointment with the logged-in patient
+      });
+
+      const savedAppointment = await newAppointment.save();
+      io.emit("newAppointment", savedAppointment);
+      res.status(201).json(savedAppointment);
+    } catch (error) {
+      res.status(500).json({ message: "Server Error", error: error.message });
+    }
+  });
+
+  // @desc    Update appointment by ID
+  // @route   PUT /api/appointments/:id
+  router.put("/:id", authenticateUser, async (req, res) => {
+    const { appointmentDate, reason, status } = req.body;
+
+    try {
+      const appointment = await Appointment.findById(req.params.id);
+      if (!appointment) {
+        return res.status(404).json({ message: "Appointment not found" });
+      }
+
+      appointment.appointmentDate = appointmentDate || appointment.appointmentDate;
+      appointment.reason = reason || appointment.reason;
+      appointment.status = status || appointment.status;
+
+      const updatedAppointment = await appointment.save();
+      io.emit("updateAppointment", updatedAppointment);
+
+      res.json(updatedAppointment);
+    } catch (error) {
+      res.status(500).json({ message: "Server Error", error: error.message });
+    }
+  });
+
+  // @desc    Delete appointment by ID
+  // @route   DELETE /api/appointments/:id
+  router.delete("/:id", authenticateUser, async (req, res) => {
+    try {
+      const appointment = await Appointment.findById(req.params.id);
+      if (!appointment) {
+        return res.status(404).json({ message: "Appointment not found" });
+      }
+
+      await appointment.deleteOne();
+      io.emit("deleteAppointment", appointment._id);
       res.json({ message: "Appointment removed" });
     } catch (error) {
       res.status(500).json({ message: "Server Error", error: error.message });

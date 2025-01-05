@@ -1,3 +1,4 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const express = require('express');
 const http = require('http');
@@ -72,7 +73,7 @@ io.on('connection', (socket) => {
 });
 
 // Start server using `server.listen` instead of `app.listen`
-const PORT = process.env.PORT || 3010;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
@@ -118,3 +119,9 @@ server.listen(PORT, () => {
 
 // Initialize the change stream and link it with Socket.io
 // watchPatientChanges();
+
+console.log('Environment Variables Check:', {
+  cloudinary_name: process.env.CLOUDINARY_CLOUD_NAME || 'Missing',
+  cloudinary_key: process.env.CLOUDINARY_API_KEY ? 'Present' : 'Missing',
+  cloudinary_secret: process.env.CLOUDINARY_API_SECRET ? 'Present' : 'Missing'
+});

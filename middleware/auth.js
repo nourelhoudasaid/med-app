@@ -1,5 +1,5 @@
 // middleware/authMiddleware.js
-const jwt = require("jsonwebtoken");
+/*const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 
 const authMiddleware = async (req, res, next) => {
@@ -28,6 +28,15 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).send({ error: "Please authenticate." });
     }
 
+// **Role-based Access Control (RBAC) Check**
+if (user.role !== "Patient") {
+  console.log("Access denied: Not a Patient."); // Debug log
+  return res.status(403).send({ error: "Access denied. Only patients can perform this action." });
+}
+
+
+
+
     // Attach the token and user to the request object
     req.token = token;
     req.user = user;
@@ -45,4 +54,42 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-module.exports = authMiddleware;
+module.exports = authMiddleware;*/
+
+
+const jwt = require("jsonwebtoken");
+const User = require("../models/user");
+
+// Authentication Middleware
+const authenticateUser = async (req, res, next) => {
+  try {
+    const authHeader = req.header("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).send({ error: "Please authenticate." });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findOne({ _id: decoded.userId });
+    if (!user) {
+      return res.status(401).send({ error: "Please authenticate." });
+    }
+
+    req.token = token;
+    req.user = user; // Attach user to the request
+    next(); // Proceed
+  } catch (error) {
+    res.status(401).send({ error: "Invalid or expired token." });
+  }
+};
+
+// Authorization Middleware for Patients
+const authorizePatient = (req, res, next) => {
+  if (req.user.role !== "Patient") {
+    return res.status(403).send({ error: "Access denied. Patients only." });
+  }
+  next(); // Proceed if role is "Patient"
+};
+
+module.exports = { authenticateUser, authorizePatient };
