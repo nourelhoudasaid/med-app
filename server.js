@@ -3,27 +3,38 @@ const mongoose = require('mongoose');
 const express = require('express');
 const http = require('http');
 const socketio = require('socket.io');
-const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/db');
-const authRoutes = require('./routes/auth');
-const indexRoutes = require('./routes/index'); 
 const fs = require('fs');
 const path = require('path');
+const { verifyCloudinaryConfig } = require('./config/cloudinary');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const bodyParser = require('body-parser');
 
-// Load environment variables
-dotenv.config();
-
-// Connect to MongoDB
-connectDB();
 const app = express();
 const server = http.createServer(app);
-// Initialize app
 
+// Initialize Socket.io with CORS
+const io = socketio(server, {
+  cors: {
+    origin: process.env.NODE_ENV === 'production' 
+      ? process.env.FRONTEND_URL 
+      : "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
 
 // Middleware
-app.use(express.json());
-app.use(cors());
+app.use(bodyParser.json({limit: '50mb'}));
+app.use(bodyParser.urlencoded({limit: '50mb', extended: true}));
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL 
+    : "http://localhost:3000",
+  credentials: true
+}));
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -31,97 +42,72 @@ if (!fs.existsSync(uploadsDir)){
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Static files
 app.use('/uploads', express.static('uploads'));
 
-// Initialize Socket.io after the server has been created
-const io = socketio(server, {
-  cors: {
-    origin: "*", // Allow all origins (in production, restrict this to your front-end URL)
-    methods: ["GET", "POST"]
-  }
-});
-// Use the auth routes
-app.use('/api/auth', authRoutes);
+// Load swagger document
+const swaggerDocument = YAML.load('./docs/swagger.yaml');
 
+// Swagger setup
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: "Medical Appointment API Documentation"
+}));
 
-// Use routes from index.js
+// Mount all routes through index.js
 const routes = require('./routes/index')(io);
-app.use('/', routes);  // Apply all routes from index.js
+app.use('/', routes);
 
-// Simple test route
-app.get('/', (req, res) => {
-  res.send('Server is running');
-});
-
-// Initialize the HTTP server *before* using it with Socket.io
-
-
-
-
-// Socket.io connection event
-io.on('connection', (socket) => {
-  console.log('New WebSocket connection:', socket.id);
-
-  socket.on('message', (data) => {
-    console.log('Message from client:', data);
-    io.emit('message', { text: `Server: ${data}` });
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    message: "Server Error",
+    error: {
+      path: req.path,
+      message: err.message
+    }
   });
 });
 
-// Start server using `server.listen` instead of `app.listen`
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Initialize database and verify configurations
+const initializeServer = async () => {
+  try {
+    // Verify Cloudinary configuration
+    const cloudinaryConfigured = verifyCloudinaryConfig();
+    if (!cloudinaryConfigured) {
+      throw new Error('Cloudinary configuration is incomplete');
+    }
 
-// Watch function to track changes in the patients collection
-//const watchPatientChanges = async () => {
-  //const patientCollection = mongoose.connection.collection('patients');
+    // Connect to MongoDB
+    await connectDB();
 
-  // Create a change stream to watch for changes in the patients collection
-  //const changeStream = patientCollection.watch();
+    // Start server
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log('Environment:', process.env.NODE_ENV);
+      console.log('MongoDB:', 'Connected');
+      console.log('Cloudinary:', 'Configured');
+    });
 
-  // When there is a change in the collection
-  //changeStream.on('change', (change) => {
-    //console.log('Change detected:', change);
+  } catch (error) {
+    console.error('Server initialization failed:', error);
+    process.exit(1);
+  }
+};
 
-    // Handle the type of operation (insert, update, delete)
-    //if (change.operationType === 'insert') {
-      //const patient = change.fullDocument;
-      //console.log('New patient added:', patient);
+// Start the server
+initializeServer();
 
-      // Broadcast the new patient data to all connected clients
-      //io.emit('newPatient', patient);
-    //} else if (change.operationType === 'update') {
-      //const updatedFields = change.updateDescription.updatedFields;
-      //console.log('Patient updated:', updatedFields);
-
-      // Broadcast the updated patient data to all clients
-      //io.emit('updatePatient', updatedFields);
-    //} else if (change.operationType === 'delete') {
-      //const deletedPatientId = change.documentKey._id;
-      //console.log('Patient deleted:', deletedPatientId);
-
-      // Broadcast the ID of the deleted patient
-      //io.emit('deletePatient', deletedPatientId);
-    //}
-  //});
-
-  // Handle errors on the change stream
-  //changeStream.on('error', (error) => {
-    //console.error('Error in change stream:', error);
-  //});
-//};
-
-// Initialize the change stream and link it with Socket.io
-// watchPatientChanges();
-
-console.log('Environment Variables Check:', {
-  cloudinary_name: process.env.CLOUDINARY_CLOUD_NAME || 'Missing',
-  cloudinary_key: process.env.CLOUDINARY_API_KEY ? 'Present' : 'Missing',
-  cloudinary_secret: process.env.CLOUDINARY_API_SECRET ? 'Present' : 'Missing'
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB connection closed.');
+      process.exit(0);
+    });
+  });
 });

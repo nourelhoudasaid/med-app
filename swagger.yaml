@@ -1,0 +1,849 @@
+openapi: 3.0.0
+info:
+  title: Medical Appointment API
+  version: 1.0.0
+  description: API documentation for Medical Appointment System
+
+servers:
+  - url: http://localhost:5000
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - phoneNumber
+        - CIN
+        - role
+      properties:
+        name:
+          type: string
+          example: "Dr. John Smith"
+        email:
+          type: string
+          format: email
+          example: "john.smith@example.com"
+        password:
+          type: string
+          format: password
+          example: "Doctor123!"
+        phoneNumber:
+          type: string
+          example: "+1234567890"
+        CIN:
+          type: string
+          example: "D123456"
+        role:
+          type: string
+          enum: [Doctor, Patient, Admin]
+        specialization:
+          type: string
+          example: "Cardiology"
+        department:
+          type: string
+          format: uuid
+        profileImage:
+          type: string
+          format: uri
+        diplomaImage:
+          type: string
+          format: uri
+        availability:
+          type: array
+          items:
+            type: object
+            properties:
+              day:
+                type: string
+                enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+              slots:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    time:
+                      type: string
+                      example: "09:00"
+                    isBooked:
+                      type: boolean
+                      default: false
+        isValidated:
+          type: boolean
+          default: false
+        medicalHistory:
+          type: string
+
+    Department:
+      type: object
+      required:
+        - name
+        - description
+      properties:
+        name:
+          type: string
+          example: "Cardiology"
+        description:
+          type: string
+          example: "Diagnosis and treatment of heart diseases"
+        doctors:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    Appointment:
+      type: object
+      required:
+        - patient
+        - doctor
+        - appointmentDate
+        - reason
+        - department
+      properties:
+        patient:
+          type: string
+          format: uuid
+        doctor:
+          type: string
+          format: uuid
+        appointmentDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [Pending, Confirmed, Cancelled, Completed]
+          default: Pending
+        reason:
+          type: string
+        department:
+          type: string
+          format: uuid
+
+    MedicalHistory:
+      type: object
+      required:
+        - patient
+        - doctor
+        - diagnosis
+      properties:
+        patient:
+          type: string
+          format: uuid
+        doctor:
+          type: string
+          format: uuid
+        appointment:
+          type: string
+          format: uuid
+        diagnosis:
+          type: string
+        prescription:
+          type: array
+          items:
+            type: object
+            properties:
+              medication:
+                type: string
+              dosage:
+                type: string
+              frequency:
+                type: string
+              duration:
+                type: string
+        notes:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              description:
+                type: string
+        vitalSigns:
+          type: object
+          properties:
+            bloodPressure:
+              type: string
+            heartRate:
+              type: string
+            temperature:
+              type: string
+        followUpDate:
+          type: string
+          format: date-time
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        201:
+          description: User registered successfully
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+
+  /api/doctors:
+    get:
+      tags: [Doctors]
+      summary: Get all doctors
+      responses:
+        200:
+          description: List of all doctors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+    
+    post:
+      tags: [Doctors]
+      summary: Register new doctor
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                phoneNumber:
+                  type: string
+                CIN:
+                  type: string
+                specialization:
+                  type: string
+                department:
+                  type: string
+                availability:
+                  type: string
+                profileImage:
+                  type: string
+                  format: binary
+                diplomaImage:
+                  type: string
+                  format: binary
+      responses:
+        201:
+          description: Doctor registered successfully
+
+  /api/doctors/{id}:
+    get:
+      tags: [Doctors]
+      summary: Get doctor by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Doctor details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    
+    put:
+      tags: [Doctors]
+      summary: Update doctor
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                specialty:
+                  type: string
+                availableTimes:
+                  type: string
+                profileImage:
+                  type: string
+                  format: binary
+                diplomaImage:
+                  type: string
+                  format: binary
+      responses:
+        200:
+          description: Doctor updated successfully
+
+    delete:
+      tags: [Doctors]
+      summary: Delete doctor
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Doctor deleted successfully
+
+  /api/doctors/{id}/availability:
+    get:
+      tags: [Doctors]
+      summary: Get doctor availability
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Doctor availability
+    
+    put:
+      tags: [Doctors]
+      summary: Update doctor availability
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                availability:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/User/properties/availability/items'
+      responses:
+        200:
+          description: Availability updated successfully
+
+  /api/doctors/{id}/stats:
+    get:
+      tags: [Doctors]
+      summary: Get doctor statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Doctor statistics
+
+  /api/doctors/{id}/patients:
+    get:
+      tags: [Doctors]
+      summary: Get doctor's patients
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of doctor's patients
+
+  /api/doctors/{id}/appointments:
+    get:
+      tags: [Doctors]
+      summary: Get doctor's appointments
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of doctor's appointments
+
+  /api/patients:
+    get:
+      tags: [Patients]
+      summary: Get all patients
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of all patients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /api/patients/profile:
+    get:
+      tags: [Patients]
+      summary: Get patient profile
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Patient profile
+    
+    put:
+      tags: [Patients]
+      summary: Update patient profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phoneNumber:
+                  type: string
+                email:
+                  type: string
+      responses:
+        200:
+          description: Profile updated successfully
+
+  /api/patients/my-appointments:
+    get:
+      tags: [Patients]
+      summary: Get patient's appointments
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of patient's appointments
+
+  /api/patients/my-medical-history:
+    get:
+      tags: [Patients]
+      summary: Get patient's medical history
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Patient's medical history
+
+  /api/patients/book-appointment:
+    post:
+      tags: [Patients]
+      summary: Book an appointment
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - doctorId
+                - appointmentDate
+                - reason
+                - departmentId
+              properties:
+                doctorId:
+                  type: string
+                appointmentDate:
+                  type: string
+                  format: date-time
+                reason:
+                  type: string
+                departmentId:
+                  type: string
+      responses:
+        201:
+          description: Appointment booked successfully
+
+  /api/departments:
+    get:
+      tags: [Departments]
+      summary: Get all departments
+      responses:
+        200:
+          description: List of all departments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Department'
+    
+    post:
+      tags: [Departments]
+      summary: Create department
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Department'
+      responses:
+        201:
+          description: Department created successfully
+
+  /api/departments/{id}:
+    get:
+      tags: [Departments]
+      summary: Get department by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Department details
+    
+    put:
+      tags: [Departments]
+      summary: Update department
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Department'
+      responses:
+        200:
+          description: Department updated successfully
+    
+    delete:
+      tags: [Departments]
+      summary: Delete department
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Department deleted successfully
+
+  /api/appointments:
+    get:
+      tags: [Appointments]
+      summary: Get all appointments
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of all appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Appointment'
+    
+    post:
+      tags: [Appointments]
+      summary: Create appointment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Appointment'
+      responses:
+        201:
+          description: Appointment created successfully
+
+  /api/appointments/{id}:
+    get:
+      tags: [Appointments]
+      summary: Get appointment by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Appointment details
+    
+    delete:
+      tags: [Appointments]
+      summary: Delete appointment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Appointment deleted successfully
+
+  /api/appointments/{id}/status:
+    put:
+      tags: [Appointments]
+      summary: Update appointment status
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [Pending, Confirmed, Cancelled, Completed]
+                medicalHistory:
+                  $ref: '#/components/schemas/MedicalHistory'
+      responses:
+        200:
+          description: Appointment status updated successfully
+
+  /api/medical-history:
+    post:
+      tags: [Medical History]
+      summary: Create medical history record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                patient:
+                  type: string
+                doctor:
+                  type: string
+                appointment:
+                  type: string
+                diagnosis:
+                  type: string
+                prescription:
+                  type: string
+                notes:
+                  type: string
+                vitalSigns:
+                  type: string
+                followUpDate:
+                  type: string
+                  format: date-time
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        201:
+          description: Medical history record created successfully
+
+  /api/medical-history/{id}:
+    put:
+      tags: [Medical History]
+      summary: Update medical history record
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                diagnosis:
+                  type: string
+                prescription:
+                  type: string
+                notes:
+                  type: string
+                vitalSigns:
+                  type: string
+                followUpDate:
+                  type: string
+                  format: date-time
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        200:
+          description: Medical history record updated successfully
+
+  /api/admin/stats:
+    get:
+      tags: [Admin]
+      summary: Get overall statistics
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Overall system statistics
+
+  /api/admin/verify-doctor/{id}:
+    put:
+      tags: [Admin]
+      summary: Verify doctor account
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isValidated:
+                  type: boolean
+      responses:
+        200:
+          description: Doctor verification status updated successfully
+
+  /api/public/departments:
+    get:
+      tags: [Public]
+      summary: Get all departments (public)
+      responses:
+        200:
+          description: List of all departments with validated doctors
+
+  /api/public/doctors:
+    get:
+      tags: [Public]
+      summary: Get all validated doctors (public)
+      responses:
+        200:
+          description: List of all validated doctors
+
+  /api/public/departments/{departmentId}/doctors:
+    get:
+      tags: [Public]
+      summary: Get validated doctors by department (public)
+      parameters:
+        - in: path
+          name: departmentId
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of validated doctors in the department
+
+security:
+  - bearerAuth: [] 

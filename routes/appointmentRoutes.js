@@ -1,214 +1,145 @@
-/*  const express = require("express");
-const router = express.Router();
-const Appointment = require("../models/Appointment");
-
-module.exports = function(io) {
-  // @desc    Get all appointments
-  // @route   GET /api/appointments
-  // @access  Public
-  router.get("/", async (req, res) => {
-    try {
-      const appointments = await Appointment.find()
-        .populate("patient", "name email")
-        .populate("doctor", "name specialization");
-      res.json(appointments);
-    } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
-    }
-  });
-
-  // @desc    Get single appointment by ID
-  // @route   GET /api/appointments/:id
-  // @access  Public
-  router.get("/:id", async (req, res) => {
-    try {
-      const appointment = await Appointment.findById(req.params.id)
-        .populate("patient", "name email")
-        .populate("doctor", "name specialization");
-      if (!appointment) {
-        return res.status(404).json({ message: "Appointment not found" });
-      }
-      res.json(appointment);
-    } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
-    }
-  });
-
-  // @desc    Create new appointment
-  // @route   POST /api/appointments
-  // @access  Public
-  router.post("/create", async (req, res) => {
-    console.log("Appointment creation route hit");
-    const { name, phone, department, doctor, appointmentDate, reason} = req.body;
-    console.log("Request body:", req.body);
-
-    if (!name || !phone || !department || !doctor || !appointmentDate || !reason) {
-      return res.status(400).json({ message: "Please provide all required fields" });
-    }
-
-    try {
-      console.log("Creating new appointment");
-      const newAppointment = new Appointment({
-        name,
-        phone,
-        department,
-        doctor,
-        appointmentDate,
-        reason,
-      });
-
-      console.log("Saving appointment");
-      const savedAppointment = await newAppointment.save();
-      console.log("Appointment saved:", savedAppointment);
-
-      console.log("Emitting newAppointment event");
-      io.emit("newAppointment", savedAppointment);
-
-      console.log("Sending response");
-      res.status(201).json(savedAppointment);
-    } catch (error) {
-      console.error("Error saving appointment:", error);
-      res.status(500).json({ message: "Server Error", error: error.message });
-    }
-  });
-
-  // @desc    Update appointment by ID
-  // @route   PUT /api/appointments/:id
-  // @access  Public
-  router.put("/:id", async (req, res) => {
-    const { appointmentDate, reason, status } = req.body;
-
-    try {
-      const appointment = await Appointment.findById(req.params.id);
-      if (!appointment) {
-        return res.status(404).json({ message: "Appointment not found" });
-      }
-
-      appointment.appointmentDate = appointmentDate || appointment.appointmentDate;
-      appointment.reason = reason || appointment.reason;
-      appointment.status = status || appointment.status;
-
-      const updatedAppointment = await appointment.save();
-      
-
-      io.emit("updateAppointment", updatedAppointment);
-
-      res.json(updatedAppointment);
-    } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
-    }
-  });
-
-  // @desc    Delete appointment by ID
-  // @route   DELETE /api/appointments/:id
-  // @access  Public
-  router.delete("/:id", async (req, res) => {
-    try {
-      const appointment = await Appointment.findById(req.params.id);
-      if (!appointment) {
-        return res.status(404).json({ message: "Appointment not found" });
-      }
-
-      await appointment.deleteOne();
-
-      io.emit("deleteAppointment", appointment._id);
-
-      res.json({ message: "Appointment removed" });
-    } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
-    }
-  });
-
-  return router;
-};*/
-
 const express = require("express");
 const router = express.Router();
 const Appointment = require("../models/Appointment");
-const { authenticateUser, authorizePatient } = require("../middleware/auth");
+const { authenticateUser } = require("../middleware/auth");
+const MedicalHistory = require("../models/MedicalHistory");
 
 module.exports = function(io) {
-  // @desc    Get all appointments (requires authentication)
-  // @route   GET /api/appointments
-  router.get("/", authenticateUser, async (req, res) => {
+  // Create appointment
+  router.post("/", authenticateUser, async (req, res) => {
     try {
-      const appointments = await Appointment.find()
-        .populate("patient", "name email")
-        .populate("doctor", "name specialization");
-      res.json(appointments);
-    } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
-    }
-  });
-
-  // @desc    Create new appointment (Patients only)
-  // @route   POST /api/appointments/create
-  router.post("/create", authenticateUser, authorizePatient, async (req, res) => {
-    console.log("Appointment creation route hit");
-
-    const { name, phone, department, doctor, appointmentDate, reason } = req.body;
-
-    if (!name || !phone || !department || !doctor || !appointmentDate || !reason) {
-      return res.status(400).json({ message: "Please provide all required fields" });
-    }
-
-    try {
-      const newAppointment = new Appointment({
-        name,
-        phone,
-        department,
+      const { doctor, appointmentDate, reason, department } = req.body;
+      const appointment = new Appointment({
+        patient: req.user._id,
         doctor,
         appointmentDate,
         reason,
-        patient: req.user._id, // Associate the appointment with the logged-in patient
+        department
       });
-
-      const savedAppointment = await newAppointment.save();
-      io.emit("newAppointment", savedAppointment);
-      res.status(201).json(savedAppointment);
+      
+      await appointment.save();
+      
+      // Populate the newly created appointment
+      const populatedAppointment = await Appointment.findById(appointment._id)
+        .populate('patient', 'name email phoneNumber')
+        .populate('doctor', 'name email specialization availability')
+        .populate('department', 'name description');
+      
+      // Emit socket event with populated data
+      io.emit('newAppointment', populatedAppointment);
+      
+      res.status(201).json({ 
+        message: "Appointment created successfully", 
+        appointment: populatedAppointment 
+      });
     } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
+      res.status(500).json({ message: "Error creating appointment", error: error.message });
     }
   });
 
-  // @desc    Update appointment by ID
-  // @route   PUT /api/appointments/:id
-  router.put("/:id", authenticateUser, async (req, res) => {
-    const { appointmentDate, reason, status } = req.body;
-
+  // Get all appointments
+  router.get("/", authenticateUser, async (req, res) => {
     try {
-      const appointment = await Appointment.findById(req.params.id);
+      const appointments = await Appointment.find()
+        .populate('patient', 'name email phoneNumber CIN')
+        .populate('doctor', 'name email specialization availability')
+        .populate('department', 'name description')
+        .sort({ appointmentDate: 'asc' })
+        .lean();
+      res.status(200).json(appointments);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching appointments", error: error.message });
+    }
+  });
+
+  // Get appointment by ID
+  router.get("/:id", authenticateUser, async (req, res) => {
+    try {
+      const appointment = await Appointment.findById(req.params.id)
+        .populate('patient', 'name email phoneNumber CIN')
+        .populate('doctor', 'name email specialization availability')
+        .populate('department', 'name description');
+      
+      if (!appointment) {
+        return res.status(404).json({ message: "Appointment not found" });
+      }
+      res.status(200).json(appointment);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching appointment", error: error.message });
+    }
+  });
+
+  // Update appointment status
+  router.put("/:id/status", authenticateUser, async (req, res) => {
+    try {
+      const { status, medicalHistory } = req.body;
+      const appointment = await Appointment.findByIdAndUpdate(
+        req.params.id,
+        { status },
+        { new: true }
+      )
+      .populate('patient', 'name email phoneNumber')
+      .populate('doctor', 'name email specialization availability')
+      .populate('department', 'name description');
+
       if (!appointment) {
         return res.status(404).json({ message: "Appointment not found" });
       }
 
-      appointment.appointmentDate = appointmentDate || appointment.appointmentDate;
-      appointment.reason = reason || appointment.reason;
-      appointment.status = status || appointment.status;
-
-      const updatedAppointment = await appointment.save();
-      io.emit("updateAppointment", updatedAppointment);
-
-      res.json(updatedAppointment);
+      // If appointment is completed and medical history is provided, create a record
+      if (status === 'Completed' && medicalHistory) {
+        const newMedicalHistory = new MedicalHistory({
+          patient: appointment.patient._id,
+          doctor: appointment.doctor._id,
+          appointment: appointment._id,
+          ...medicalHistory
+        });
+        await newMedicalHistory.save();
+      }
+      
+      // Emit socket event with populated data
+      io.emit('appointmentUpdated', appointment);
+      
+      res.status(200).json({ 
+        message: "Appointment status updated successfully", 
+        appointment 
+      });
     } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
+      res.status(500).json({ 
+        message: "Error updating appointment status", 
+        error: error.message 
+      });
     }
   });
 
-  // @desc    Delete appointment by ID
-  // @route   DELETE /api/appointments/:id
+  // Delete appointment
   router.delete("/:id", authenticateUser, async (req, res) => {
     try {
-      const appointment = await Appointment.findById(req.params.id);
+      const appointment = await Appointment.findById(req.params.id)
+        .populate('patient', 'name email')
+        .populate('doctor', 'name email')
+        .populate('department', 'name');
+
       if (!appointment) {
         return res.status(404).json({ message: "Appointment not found" });
       }
 
-      await appointment.deleteOne();
-      io.emit("deleteAppointment", appointment._id);
-      res.json({ message: "Appointment removed" });
+      await Appointment.findByIdAndDelete(req.params.id);
+      
+      // Emit socket event with appointment details
+      io.emit('appointmentDeleted', {
+        _id: appointment._id,
+        patient: appointment.patient,
+        doctor: appointment.doctor,
+        department: appointment.department
+      });
+      
+      res.status(200).json({ 
+        message: "Appointment deleted successfully",
+        appointment 
+      });
     } catch (error) {
-      res.status(500).json({ message: "Server Error", error: error.message });
+      res.status(500).json({ message: "Error deleting appointment", error: error.message });
     }
   });
 

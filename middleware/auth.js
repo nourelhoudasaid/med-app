@@ -1,6 +1,6 @@
 // middleware/authMiddleware.js
 /*const jwt = require("jsonwebtoken");
-const User = require("../models/user");
+const User = require("../models/User");
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -58,7 +58,7 @@ module.exports = authMiddleware;*/
 
 
 const jwt = require("jsonwebtoken");
-const User = require("../models/user");
+const User = require("../models/User");
 
 // Authentication Middleware
 const authenticateUser = async (req, res, next) => {

@@ -16,19 +16,50 @@ const userSchema = new mongoose.Schema(
       select: false,
       match: [/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*]).{8,}$/, 'Password must contain at least 8 characters, including uppercase, lowercase, number and special character']
     },
-    phoneNumber: {type: String, required: true },
-    CIN: { type: String, required:true }, 
+    phoneNumber: { type: String, required: true },
+    CIN: { type: String, required: true }, 
     role: { type: String, enum: ["Doctor", "Patient", "Admin"], required: true },
-    // Fields for patients
-    medicalHistory: { type: String, required: function() { return this.role === "Patient"; } },
-    // Fields for doctors
-    specialization: { type: String, required: function() { return this.role === "Doctor"; } },
-    availability: { type: String, required: function() { return this.role === "Doctor"; } },
-    diplomaImage: { type: String, required: function() { return this.role === "Doctor"; } },
-    profileImage: { type: String , required: function() { return this.role === "Doctor"; }},
-
+    
+    // Doctor specific fields
+    specialization: { 
+      type: String, 
+      required: function() { return this.role === "Doctor" }
+    },
+    department: { 
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'department',
+      required: function() { return this.role === "Doctor" }
+    },
+    profileImage: { 
+      type: String, 
+      required: function() { return this.role === "Doctor" },
+      default: function() {
+        return this.role === "Doctor" ? "https://res.cloudinary.com/ddwzg1xae/image/upload/v1/med/default-doctor.jpg" : undefined;
+      }
+    },
+    diplomaImage: { 
+      type: String, 
+      required: function() { return this.role === "Doctor" },
+      default: function() {
+        return this.role === "Doctor" ? "https://res.cloudinary.com/ddwzg1xae/image/upload/v1/med/default-diploma.jpg" : undefined;
+      }
+    },
+    availability: [{
+      day: { 
+        type: String,
+        enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+      },
+      slots: [{
+        time: String,
+        isBooked: { type: Boolean, default: false }
+      }]
+    }],
+    
+    // Patient specific fields
+    medicalHistory: { type: String },
+    
     // Common fields
-    isValidated: { type: Boolean, default: false },
+    isValidated: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
@@ -41,5 +72,4 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// Check if the model already exists before creating a new one
 module.exports = mongoose.models.User || mongoose.model("User", userSchema);

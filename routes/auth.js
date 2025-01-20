@@ -36,96 +36,44 @@ const uploadToCloudinary = async (buffer) => {
 };
 
 // Register Route
-router.post(
-  "/register",
-  upload.fields([
-    { name: "profileImage", maxCount: 1 },
-    { name: "diplomaImage", maxCount: 1 },
-  ]),
-  async (req, res) => {
-    try {
-      const {
-        name,
-        email,
-        password,
-        role,
-        phoneNumber,
-        CIN,
-        specialization,
-        availability,
-        medicalHistory,
-      } = req.body;
-
-      // Validate required fields
-      if (!name || !email || !password || !role || !phoneNumber || !CIN) {
-        return res.status(400).json({ 
-          message: "Please provide all required fields" 
-        });
-      }
-
-      let profileImageUrl = null;
-      let diplomaImageUrl = null;
-
-      // Upload images if present and if user is a doctor
-      if (role === "Doctor" && req.files) {
-        try {
-          if (req.files.profileImage) {
-            const profileResult = await uploadToCloudinary(
-              req.files.profileImage[0].buffer
-            );
-            profileImageUrl = profileResult.secure_url;
-          }
-
-          if (req.files.diplomaImage) {
-            const diplomaResult = await uploadToCloudinary(
-              req.files.diplomaImage[0].buffer
-            );
-            diplomaImageUrl = diplomaResult.secure_url;
-          }
-        } catch (uploadError) {
-          console.error('Upload error:', uploadError);
-          return res.status(500).json({ 
-            message: "Error uploading images", 
-            error: uploadError.message 
-          });
-        }
-      }
-
-      // Create new user
-      const newUser = new User({
-        name,
-        email,
-        password,
-        role,
-        phoneNumber,
-        CIN,
-        specialization: role === "Doctor" ? specialization : undefined,
-        availability: role === "Doctor" ? availability : undefined,
-        medicalHistory: role === "Patient" ? medicalHistory : undefined,
-        profileImage: profileImageUrl,
-        diplomaImage: diplomaImageUrl,
-        isValidated: role === "Doctor" ? false : true,
-      });
-
-      await newUser.save();
-
-      // Send confirmation email
-      await sendConfirmationEmail(email, name, role);
-
-      res.status(201).json({
-        message: "User registered successfully",
-        user: newUser
-      });
-
-    } catch (error) {
-      console.error("Registration error:", error);
-      res.status(500).json({ 
-        message: "Server error", 
-        error: error.message 
-      });
+router.post("/register", async (req, res) => {
+  try {
+    // Parse the availability if it's a string
+    let availability;
+    if (typeof req.body.availability === 'string') {
+      availability = JSON.parse(req.body.availability);
     }
+
+    const userData = {
+      name: req.body.name,
+      email: req.body.email,
+      password: req.body.password,
+      phoneNumber: req.body.phoneNumber,
+      CIN: req.body.CIN,
+      role: req.body.role,
+      specialization: req.body.specialization,
+      department: req.body.departmentId,
+      availability: availability,
+      medicalHistory: req.body.medicalHistory,
+      profileImage: req.files?.profileImage?.[0]?.path,
+      diplomaImage: req.files?.diplomaImage?.[0]?.path,
+    };
+
+    const user = new User(userData);
+    await user.save();
+
+    res.status(201).json({ 
+      message: "User registered successfully", 
+      user: user 
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ 
+      message: "Error registering user", 
+      error: error.message 
+    });
   }
-);
+});
 
 // Login Route
 router.post("/login", async (req, res) => {
@@ -167,19 +115,15 @@ router.post("/login", async (req, res) => {
       expiresIn: "1h",
     });
 
-    // Prepare user data to send back (excluding sensitive information)
-    const userData = {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phoneNumber: user.phoneNumber,
-      CIN: user.CIN,
-      isValidated: user.isValidated,
-      profileImage: user.profileImage,
-    };
+    // Convert user document to object and remove password
+    const userObject = user.toObject();
+    delete userObject.password;
 
-    res.json({ token, user: userData });
+    // Return all user data except password
+    res.json({ 
+      token, 
+      user: userObject
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
