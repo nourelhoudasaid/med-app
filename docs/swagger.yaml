@@ -883,5 +883,67 @@ paths:
         500:
           description: Server error
 
+  /api/doctors/{id}/profile:
+    get:
+      tags: [Doctors]
+      summary: Get doctor's detailed profile with statistics
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Doctor's profile with statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  phoneNumber:
+                    type: string
+                  CIN:
+                    type: string
+                  role:
+                    type: string
+                  specialization:
+                    type: string
+                  department:
+                    $ref: '#/components/schemas/Department'
+                  profileImage:
+                    type: string
+                  diplomaImage:
+                    type: string
+                  availability:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User/properties/availability/items'
+                  isValidated:
+                    type: boolean
+                  statistics:
+                    type: object
+                    properties:
+                      totalAppointments:
+                        type: number
+                      confirmedAppointments:
+                        type: number
+                      completedAppointments:
+                        type: number
+                      cancelledAppointments:
+                        type: number
+                      totalPatients:
+                        type: number
+        404:
+          description: Doctor not found
+        500:
+          description: Server error
+
 security:
   - bearerAuth: [] 

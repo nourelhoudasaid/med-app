@@ -3,6 +3,7 @@ const router = express.Router();
 const MedicalHistory = require("../models/MedicalHistory");
 const { authenticateUser } = require("../middleware/auth");
 const { upload } = require('../config/cloudinary');
+const mongoose = require('mongoose');
 
 // Create medical history record
 router.post("/", authenticateUser, upload.array('attachments'), async (req, res) => {
@@ -51,7 +52,7 @@ router.post("/", authenticateUser, upload.array('attachments'), async (req, res)
   }
 });
 
-// Get doctor's patients' medical histories
+// Get all medical histories for doctor's patients
 router.get("/doctor/patients", authenticateUser, async (req, res) => {
   try {
     // Ensure the user is a doctor
@@ -59,26 +60,106 @@ router.get("/doctor/patients", authenticateUser, async (req, res) => {
       return res.status(403).json({ message: "Access denied. Doctors only." });
     }
 
-    const medicalHistories = await MedicalHistory.find({ doctor: req.user._id })
-      .populate('patient', 'name email phoneNumber CIN')
-      .populate('appointment', 'appointmentDate reason')
-      .sort({ createdAt: -1 });
+    // Find all medical histories for the doctor's patients
+    const medicalHistories = await MedicalHistory.aggregate([
+      // Match medical histories for this doctor
+      { 
+        $match: { 
+          doctor: new mongoose.Types.ObjectId(req.user._id)
+        }
+      },
+      // Lookup patient details
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'patient',
+          foreignField: '_id',
+          as: 'patientDetails'
+        }
+      },
+      // Unwind patient details
+      {
+        $unwind: '$patientDetails'
+      },
+      // Lookup appointment details
+      {
+        $lookup: {
+          from: 'appointments',
+          localField: 'appointment',
+          foreignField: '_id',
+          as: 'appointmentDetails'
+        }
+      },
+      // Unwind appointment details (if exists)
+      {
+        $unwind: {
+          path: '$appointmentDetails',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      // Group by patient
+      {
+        $group: {
+          _id: '$patient',
+          patient: { $first: '$patientDetails' },
+          histories: {
+            $push: {
+              _id: '$_id',
+              diagnosis: '$diagnosis',
+              prescription: '$prescription',
+              notes: '$notes',
+              attachments: '$attachments',
+              createdAt: '$createdAt',
+              updatedAt: '$updatedAt',
+              appointment: '$appointmentDetails',
+              vitals: '$vitals',
+              symptoms: '$symptoms',
+              treatmentPlan: '$treatmentPlan',
+              followUpDate: '$followUpDate',
+              labResults: '$labResults',
+              allergies: '$allergies',
+              medicalConditions: '$medicalConditions'
+            }
+          },
+          totalVisits: { $sum: 1 },
+          lastVisit: { $max: '$createdAt' }
+        }
+      },
+      // Project only needed patient fields
+      {
+        $project: {
+          'patient.password': 0,
+          'patient.__v': 0,
+          'histories.appointment.__v': 0
+        }
+      },
+      // Sort by last visit date
+      { $sort: { lastVisit: -1 } }
+    ]);
 
-    // Group medical histories by patient
-    const groupedHistories = medicalHistories.reduce((acc, history) => {
-      const patientId = history.patient._id.toString();
-      if (!acc[patientId]) {
-        acc[patientId] = {
-          patient: history.patient,
-          histories: []
-        };
-      }
-      acc[patientId].histories.push(history);
-      return acc;
-    }, {});
+    // Add summary statistics
+    const enrichedResponse = {
+      totalPatients: medicalHistories.length,
+      totalRecords: medicalHistories.reduce((sum, p) => sum + p.histories.length, 0),
+      patients: medicalHistories.map(patient => ({
+        ...patient,
+        historySummary: {
+          totalRecords: patient.histories.length,
+          lastVisit: patient.lastVisit,
+          conditions: [...new Set(patient.histories
+            .flatMap(h => h.medicalConditions || []))],
+          allergies: [...new Set(patient.histories
+            .flatMap(h => h.allergies || []))],
+          recentDiagnoses: patient.histories
+            .slice(0, 3)
+            .map(h => h.diagnosis)
+        }
+      }))
+    };
 
-    res.status(200).json(Object.values(groupedHistories));
+    res.status(200).json(enrichedResponse);
   } catch (error) {
+    console.error('Error fetching medical histories:', error);
     res.status(500).json({
       message: "Error fetching medical histories",
       error: error.message

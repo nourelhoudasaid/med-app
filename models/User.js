@@ -28,7 +28,8 @@ const userSchema = new mongoose.Schema(
     department: { 
       type: mongoose.Schema.Types.ObjectId,
       ref: 'department',
-      required: function() { return this.role === "Doctor" }
+      required: function() { return this.role === "Doctor" },
+      default: null
     },
     profileImage: { 
       type: String, 

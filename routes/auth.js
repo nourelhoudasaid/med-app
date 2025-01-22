@@ -51,13 +51,17 @@ router.post("/register", async (req, res) => {
       phoneNumber: req.body.phoneNumber,
       CIN: req.body.CIN,
       role: req.body.role,
-      specialization: req.body.specialization,
-      department: req.body.departmentId,
-      availability: availability,
-      medicalHistory: req.body.medicalHistory,
-      profileImage: req.files?.profileImage?.[0]?.path,
-      diplomaImage: req.files?.diplomaImage?.[0]?.path,
+      medicalHistory: req.body.medicalHistory
     };
+
+    // Add doctor-specific fields only if the role is Doctor
+    if (req.body.role === "Doctor") {
+      userData.specialization = req.body.specialization;
+      userData.department = req.body.departmentId;
+      userData.availability = availability;
+      userData.profileImage = req.files?.profileImage?.[0]?.path;
+      userData.diplomaImage = req.files?.diplomaImage?.[0]?.path;
+    }
 
     const user = new User(userData);
     await user.save();
@@ -135,4 +139,5 @@ router.post("/logout", (req, res) => {
   // Client-side will handle removing token
   res.status(200).json({ message: "User logged out successfully" });
 });
+
 module.exports = router;
