@@ -16,4 +16,5 @@ const departmentSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
-module.exports = mongoose.models.department || mongoose.model('department', departmentSchema); 
+// Use a consistent model name and check if it's already registered
+module.exports = mongoose.models.Department || mongoose.model('Department', departmentSchema); 

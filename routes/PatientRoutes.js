@@ -3,7 +3,9 @@ const router = express.Router();
 const User = require("../models/User");
 const Appointment = require("../models/Appointment");
 const MedicalHistory = require("../models/MedicalHistory");
+const Department = require("../models/Department");
 const { authenticateUser } = require("../middleware/auth");
+const { upload } = require('../config/cloudinary');
 
 // ============ SPECIFIC ROUTES FIRST ============
 
@@ -165,6 +167,41 @@ router.put("/profile", authenticateUser, async (req, res) => {
     res.status(500).json({
       message: "Error updating profile",
       error: error.message
+    });
+  }
+});
+
+// Update patient's profile picture
+router.put("/profile-picture", authenticateUser, upload.single('profileImage'), async (req, res) => {
+  try {
+    // Ensure user is a patient
+    if (req.user.role !== "Patient") {
+      return res.status(403).json({ message: "Access denied. Patients only." });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No profile image provided" });
+    }
+
+    const updatedPatient = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { profileImage: req.file.path } },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!updatedPatient) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+
+    res.status(200).json({
+      message: "Profile picture updated successfully",
+      profileImage: updatedPatient.profileImage
+    });
+  } catch (error) {
+    console.error('Error updating profile picture:', error);
+    res.status(500).json({ 
+      message: "Error updating profile picture", 
+      error: error.message 
     });
   }
 });

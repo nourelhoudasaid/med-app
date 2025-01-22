@@ -1,7 +1,7 @@
 // routes/doctorRoutes.js
 const express = require("express");
 const router = express.Router();
-const User = require("../models/user");
+const User = require("../models/User");
 const Appointment = require("../models/Appointment");
 const Department = require("../models/Department");
 const { upload } = require('../config/cloudinary');
@@ -608,6 +608,76 @@ router.post('/:id/availability', authenticateUser, async (req, res) => {
     console.error('Error updating availability:', error);
     res.status(500).json({ 
       message: 'Error updating availability', 
+      error: error.message 
+    });
+  }
+});
+
+// Update profile picture
+router.put("/profile-picture", authenticateUser, upload.single('profileImage'), async (req, res) => {
+  try {
+    // Ensure user is a doctor
+    if (req.user.role !== "Doctor") {
+      return res.status(403).json({ message: "Access denied. Doctors only." });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No profile image provided" });
+    }
+
+    const updatedDoctor = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { profileImage: req.file.path } },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!updatedDoctor) {
+      return res.status(404).json({ message: "Doctor not found" });
+    }
+
+    res.status(200).json({
+      message: "Profile picture updated successfully",
+      profileImage: updatedDoctor.profileImage
+    });
+  } catch (error) {
+    console.error('Error updating profile picture:', error);
+    res.status(500).json({ 
+      message: "Error updating profile picture", 
+      error: error.message 
+    });
+  }
+});
+
+// Update diploma image
+router.put("/diploma", authenticateUser, upload.single('diplomaImage'), async (req, res) => {
+  try {
+    // Ensure user is a doctor
+    if (req.user.role !== "Doctor") {
+      return res.status(403).json({ message: "Access denied. Doctors only." });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No diploma image provided" });
+    }
+
+    const updatedDoctor = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { diplomaImage: req.file.path } },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!updatedDoctor) {
+      return res.status(404).json({ message: "Doctor not found" });
+    }
+
+    res.status(200).json({
+      message: "Diploma image updated successfully",
+      diplomaImage: updatedDoctor.diplomaImage
+    });
+  } catch (error) {
+    console.error('Error updating diploma image:', error);
+    res.status(500).json({ 
+      message: "Error updating diploma image", 
       error: error.message 
     });
   }
